@@ -101,8 +101,8 @@ function print_help() {
     color_echo GREEN "-u    --uninstall                 Uninstall items"
     color_echo GREEN "-p    --preset=<Preset>           Load preset"
     color_echo GREEN "      --list-presets              List presets"
-    color_echo GREEN "      --item={item1, item2}       Add items to task list"
-    color_echo GREEN "      --exlude={item1, item2}     Remove items from task list"
+    color_echo GREEN "      --item={item1,item2}        Add items to task list"
+    color_echo GREEN "      --exlude={item1,item2}      Remove items from task list"
     color_echo GREEN "      --new-item={name1, name2}   New an item in items"
     color_echo GREEN "      --id=<sys-id>               Assign sys id to identify system(cover the config)"
     color_echo GREEN "-n    --dry-run                   Print the steps to be executed"
@@ -136,9 +136,9 @@ function show_status() {
             if declare -f check >/dev/null 2>&1; then
                 check
                 result=$?
-                if [[ $result -eq 0 ]]; then
+                if [[ $result -eq 1 ]]; then
                     color_echo GREEN "[+] $(basename "$item_dir")"
-                elif [[ $result -eq 1 ]]; then
+                elif [[ $result -eq 0 ]]; then
                     color_echo GREEN "[ ] $(basename "$item_dir")"
                 else
                     color_echo YELLOW "[?] $(basename "$item_dir") function check must return 0 or 1"
@@ -167,7 +167,7 @@ install_dep=0
 check_dep=0
 debug=0
 target_list=()
-exlcude_list=()
+exclude_list=()
 action=""
 # End Global state
 
@@ -379,6 +379,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$verbose" == 1 ]]; then
+    log_info "Global Value: verbose = $verbose"
+    log_info "Global Value: dry_run = $dry_run"
+    log_info "Global Value: install_dep = $install_dep"
+    log_info "Global Value: check_dep = $check_dep"
+    log_info "Global Value: debug = $debug"
+    log_info "Global Value: target_list = [${target_list[@]:-}]"
+    log_info "Global Value: exclude_list = [${exclude_list[@]:-}]"
+    log_info "Global Value: action = $action"
+    echo ""
+fi
+
 case "$action" in
     "install")
         for target in "${target_list[@]}"; do
@@ -395,7 +407,7 @@ case "$action" in
             fi
             if [[ -d "items/$target" && -f "items/$target/item.conf" ]]; then
                 (
-                    if [[ $verbose == 1 ]]; then
+                    if [[ ${verbose} == 1 ]]; then
                         log_info "Task: install $target"
                     fi
 
@@ -421,37 +433,36 @@ case "$action" in
                             log_error "$target did not define function 'check_dep'"
                             exit 1
                         fi
-                    fi
 
-                    if [[ "$install_dep" == 1 && "$has_dep" != 1 ]]; then
-                        if [[ "$has_install_dep" == 1 ]]; then
-                            install_dep
-                            result=$?
-                            if [[ $verbose == 1 ]]; then
-                                if [[ $result == 0 ]]; then
-                                    prompt="$GREEN ok"
-                                else
-                                    prompt="$RED need install"
+                        if [[ "$install_dep" == 1 && "${has_dep:-0}" != 1 ]]; then
+                            if [[ "$has_install_dep" == 1 ]]; then
+                                install_dep
+                                result=$?
+                                if [[ $verbose == 1 ]]; then
+                                    if [[ $result == 0 ]]; then
+                                        prompt="$GREEN ok"
+                                    else
+                                        prompt="$RED need install"
+                                    fi
+                                    color_echo BOLD "Installing dependency...$prompt"
                                 fi
-                                color_echo BOLD "Installing dependency...$prompt"
+                            else
+                                log_error "$target did not define function 'install_dep'"
+                                exit 1
                             fi
-                        else
-                            log_error "$target did not define function 'install_dep'"
-                            exit 1
                         fi
+
                     fi
 
                     if [[ "$has_install" == 1 ]]; then
                         install
                         result=$?
-                        if [[ $verbose == 1 ]]; then
-                            if [[ $result == 0 ]]; then
-                                prompt="$GREEN ok"
-                            else
-                                prompt="$RED need install"
-                            fi
-                            color_echo BOLD "Installing dependency...$prompt"
+                        if [[ $result == 0 ]]; then
+                            prompt="$GREEN ok"
+                        else
+                            prompt="$RED failed"
                         fi
+                        color_echo BOLD "Installing item '$target'...$prompt"
                     else
                         log_error "$target did not define function 'install'"
                         exit 1
