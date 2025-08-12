@@ -103,7 +103,7 @@ function print_help() {
     color_echo GREEN "      --list-presets              List presets"
     color_echo GREEN "      --item={item1,item2}        Add items to task list"
     color_echo GREEN "      --exlude={item1,item2}      Remove items from task list"
-    color_echo GREEN "      --new-item={name1, name2}   New an item in items"
+    color_echo GREEN "      --new-item={name1,name2}    New an item in items"
     color_echo GREEN "      --id=<sys-id>               Assign sys id to identify system(cover the config)"
     color_echo GREEN "-n    --dry-run                   Print the steps to be executed"
     color_echo GREEN "-v    --verbose                   Print the steps while executing"
@@ -153,7 +153,7 @@ function show_status() {
 
 function run() {
     if [[ "$dry_run" == 1 || "$verbose" == 1 ]]; then
-        color_echo YELLOW "+ $*"
+        color_echo CYAN "+ $*"
     fi
     if [[ "$dry_run" != "1" ]]; then
         eval "$@"
@@ -168,7 +168,7 @@ check_dep=0
 debug=0
 target_list=()
 exclude_list=()
-action=""
+action="unset"
 # End Global state
 
 # Script begin
@@ -416,6 +416,7 @@ case "$action" in
                     has_check_dep=$(declare -f check_dep >/dev/null 2>&1 && echo 1 || echo 0)
                     has_install_dep=$(declare -f install_dep >/dev/null 2>&1 && echo 1 || echo 0)
                     has_install=$(declare -f install >/dev/null 2>&1 && echo 1 || echo 0)
+                    has_check=$(declare -f check >/dev/null 2>&1 && echo 1 || echo 0)
 
                     if [[ "$check_dep" == 1 || "$install_dep" == 1 ]]; then
                         if [[ "$has_check_dep" == 1 ]]; then
@@ -451,23 +452,52 @@ case "$action" in
                                 exit 1
                             fi
                         fi
+                    fi
 
+
+                    if [[ "$has_check" == 1 ]]; then
+                        check
+                        result=$?
+                        if [[ $result == 1 ]]; then
+                            log_warn "$target is installed"
+                            if [[ $dry_run != 1 ]]; then
+                                while true; do
+                                    read -p "Reinstall? [Y/n] " y_or_n
+                                    case "$y_or_n" in
+                                        [Yy]) break ;;
+                                        [Nn]) exit 1 ;;
+                                        *   ) log_warn "Not an option" ;;
+                                    esac
+                                done
+                            fi
+                        fi
+                    else
+                        log_error "$target did not define function 'check'"
+                        exit 1
                     fi
 
                     if [[ "$has_install" == 1 ]]; then
                         install
                         result=$?
                         if [[ $result == 0 ]]; then
-                            prompt="$GREEN ok"
+                            exit 0
                         else
-                            prompt="$RED failed"
+                            exit 1
                         fi
-                        color_echo BOLD "Installing item '$target'...$prompt"
                     else
                         log_error "$target did not define function 'install'"
                         exit 1
                     fi
                 )
+                if [[ $dry_run != 1 ]]; then
+                    result=$?
+                    if [[ $result == 0 ]]; then
+                        prompt="$GREEN ok"
+                    else
+                        prompt="$RED failed"
+                    fi
+                    color_echo BOLD "Installing item '$target'...$prompt"
+                fi
             else
                 log_warn "Target $target not found..."
             fi
@@ -541,6 +571,10 @@ case "$action" in
                 log_warn "Target $target not found..."
             fi
         done
+        ;;
+    "unset")
+        log_warn "Action Unset"
+        exit 0
         ;;
 
     *)
