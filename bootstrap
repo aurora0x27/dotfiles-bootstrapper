@@ -39,28 +39,6 @@ log_debug() {
     [[ "${debug:-}" == 1 ]] && echo -e "${BOLD}[DEBUG]${RESET} $*"
 }
 
-function run_item_action() {
-    local item="$1"
-    local action="$2"
-
-    local item_conf="./items/$item/item.conf"
-    if [[ ! -f "$item_conf" ]]; then
-        log_error "Item '$item' not found"
-        return 1
-    fi
-
-    source "$item_conf"
-
-    if declare -F "$action" > /dev/null; then
-        "$action"
-        if [ $? -ne 0 ]; then
-            log_error "Action $action failed"
-        fi
-    else
-        log_error "Action '$action' not defined in item '$item'"
-    fi
-}
-
 function show_all_items() {
     DIR="items/"
 
@@ -218,6 +196,17 @@ declare -A presets
 # Script begin
 set -uo pipefail
 
+if [[ ! -t 1 ]]; then
+    RED=''
+    GREEN=''
+    YELLOW=''
+    CYAN=''
+    MAGENTA=''
+    BLUE=''
+    BOLD=''
+    RESET=''
+fi
+
 if [ $# -eq 0 ]; then
     print_help
     exit 0
@@ -292,22 +281,6 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
 
-        -I)
-            if [[ -z "${2:-}" || "${2:-}" == -* ]] then
-                log_error "Missing or invalid item name after '-I'"
-                exit 1
-            fi
-            item="$2"
-            target_list+=("$item")
-            shift 2
-            ;;
-
-        -I*)
-            item="${1#-I}"
-            target_list+=("$item")
-            shift
-            ;;
-
         --item=*)
             val="${1#--item=}"
             if [[ "$val" =~ ^\{.*\}$ ]]; then
@@ -332,6 +305,20 @@ while [[ $# -gt 0 ]]; do
             fi
             item="$2"
             target_list+=("$item")
+            shift 2
+            ;;
+
+        --id=*)
+            sys_id="${1#--id=}"
+            shift
+            ;;
+
+        --id)
+            if [[ -z "${2:-}" || "${2:-}" == -* ]] then
+                log_error "Missing or invalid item name after '--id'"
+                exit 1
+            fi
+            sys_id="$2"
             shift 2
             ;;
 
@@ -363,20 +350,6 @@ while [[ $# -gt 0 ]]; do
 
         --check-dependency)
             check_dep=1
-            shift
-            ;;
-
-        --new-item=*)
-            val="${1#--new-item=}"
-            if [[ "$val" == \{*} ]]; then
-                # Brace expansion: eval hack
-                expanded_items=$(eval echo "$val")
-                for item in $expanded_items; do
-                    item_new $item
-                done
-            else
-                item_new $val
-            fi
             shift
             ;;
 
@@ -460,6 +433,7 @@ if [[ "$verbose" == 1 ]]; then
     log_info "Global Value: target_list = [${target_list[@]:-}]"
     log_info "Global Value: exclude_list = [${exclude_list[@]:-}]"
     log_info "Global Value: action = $action"
+    log_info "Global Value: sys_id = $sys_id"
     echo ""
 fi
 
